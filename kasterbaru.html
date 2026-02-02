@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Uang Kas TKI C</title>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+
+<style>
+body{
+  margin:0;
+  font-family:Poppins,sans-serif;
+  background:
+    radial-gradient(circle at top left,#ffd1e8,transparent 40%),
+    radial-gradient(circle at bottom right,#ffc0da,transparent 40%),
+    linear-gradient(135deg,#ffe6f2,#fff0f7);
+}
+.container{padding:15px}
+.card{
+  background:#fff;
+  border-radius:18px;
+  padding:15px;
+  margin-bottom:15px;
+  box-shadow:0 6px 18px rgba(255,105,180,.3)
+}
+h1,h2,h3{text-align:center;color:#ff4d94}
+button{
+  background:#ff69b4;
+  border:none;
+  padding:10px;
+  border-radius:12px;
+  color:white;
+  font-weight:bold;
+  width:100%;
+  margin-top:6px;
+}
+button.secondary{
+  background:#ffb3d9;
+  color:#b3005e;
+}
+input,select,textarea{
+  width:100%;
+  padding:8px;
+  margin-top:5px;
+  border-radius:10px;
+  border:1px solid #ddd;
+}
+textarea{resize:none}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+th,td{
+  padding:6px;
+  border-bottom:1px solid #eee;
+  text-align:center;
+}
+th{background:#ffe3f0}
+.total{
+  text-align:center;
+  font-size:18px;
+  font-weight:bold;
+  color:#ff4d94;
+}
+.emoji{text-align:center;font-size:22px}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div class="container" id="loginBox">
+  <div class="card">
+    <h1>💖 Uang Kas TKI C 💰</h1>
+    <div class="emoji">🎀✨📒</div>
+    <input type="email" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <br><br>
+    <button onclick="login()">Login</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div class="container" id="app" style="display:none">
+
+<div class="card">
+  <h1>💖 Uang Kas TKI C 💰</h1>
+  <div class="emoji">💸📅✨</div>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<div class="card">
+  <h3>➕➖ Uang Masuk / Keluar</h3>
+  <input type="date" id="tanggal">
+  <input type="number" id="nominal" placeholder="Nominal (Rp)">
+  <select id="jenis">
+    <option value="masuk">💰 Uang Masuk</option>
+    <option value="keluar">💸 Uang Keluar</option>
+  </select>
+  <textarea id="keterangan" placeholder="Keterangan (contoh: kas harian, beli alat kebersihan)"></textarea>
+  <button onclick="simpan()">Simpan</button>
+  <button class="secondary" onclick="undo()">↩️ Batalkan Input Terakhir</button>
+</div>
+
+<div class="card">
+  <h3>📜 History Kas</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Tanggal</th>
+        <th>Jenis</th>
+        <th>Nominal</th>
+        <th>Keterangan</th>
+      </tr>
+    </thead>
+    <tbody id="history"></tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h3>📊 Rekap</h3>
+  <div class="total" id="rekap">Rp 0</div>
+</div>
+
+<div class="card" id="resetBox" style="display:none">
+  <h3>⚠️ Reset Data (KM)</h3>
+  <button onclick="reset()">RESET SEMUA DATA</button>
+</div>
+
+</div>
+
+<script>
+/* ============ FIREBASE CONFIG ============
+   GANTI DENGAN CONFIG PUNYAMU
+========================================= */
+firebase.initializeApp({
+  apiKey: "AIzaSyD63vYABCftc5ekqh6x793Ppy0vc2vNtIs",
+  authDomain: "kastkic.firebaseapp.com",
+  projectId: "kastkic"
+});
+
+const db = firebase.firestore();
+const auth = firebase.auth();
+let lastDocId = null;
+
+/* LOGIN */
+function login(){
+  const email = document.getElementById("email").value;
+  const pass  = document.getElementById("password").value;
+
+  auth.signInWithEmailAndPassword(email, pass)
+    .then(()=>{
+      document.getElementById("loginBox").style.display="none";
+      document.getElementById("app").style.display="block";
+      if(email === "km@tkic.com"){
+        document.getElementById("resetBox").style.display="block";
+      }
+      load();
+    })
+    .catch(e=>alert("❌ Login gagal: " + e.message));
+}
+
+function logout(){
+  auth.signOut().then(()=>location.reload());
+}
+
+/* SIMPAN */
+function simpan(){
+  const t = document.getElementById("tanggal").value;
+  const n = parseInt(document.getElementById("nominal").value);
+  const j = document.getElementById("jenis").value;
+  const k = document.getElementById("keterangan").value;
+
+  if(!t || !n){
+    alert("⚠️ Lengkapi data dulu");
+    return;
+  }
+
+  db.collection("kas").add({
+    tanggal: t,
+    nominal: n,
+    jenis: j,
+    keterangan: k,
+    time: Date.now()
+  }).then(ref=>{
+    lastDocId = ref.id;
+    document.getElementById("nominal").value="";
+    document.getElementById("keterangan").value="";
+    load();
+  });
+}
+
+/* UNDO */
+function undo(){
+  if(!lastDocId){
+    alert("❌ Tidak ada data untuk dibatalkan");
+    return;
+  }
+  if(!confirm("Batalkan transaksi terakhir?")) return;
+
+  db.collection("kas").doc(lastDocId).delete().then(()=>{
+    lastDocId = null;
+    load();
+  });
+}
+
+/* LOAD DATA */
+function load(){
+  db.collection("kas").orderBy("time","asc").get().then(snap=>{
+    let masuk=0, keluar=0;
+    let h=document.getElementById("history");
+    h.innerHTML="";
+
+    snap.forEach(d=>{
+      const x=d.data();
+      lastDocId = d.id;
+      h.innerHTML+=`
+        <tr>
+          <td>${x.tanggal}</td>
+          <td>${x.jenis}</td>
+          <td>Rp ${x.nominal.toLocaleString()}</td>
+          <td>${x.keterangan || "-"}</td>
+        </tr>
+      `;
+      if(x.jenis==="masuk") masuk+=x.nominal;
+      else keluar+=x.nominal;
+    });
+
+    document.getElementById("rekap").innerHTML=
+      `💰 Masuk: Rp ${masuk.toLocaleString()}<br>
+       💸 Keluar: Rp ${keluar.toLocaleString()}<br>
+       💖 Saldo: Rp ${(masuk-keluar).toLocaleString()}`;
+  });
+}
+
+/* RESET (KM ONLY) */
+function reset(){
+  const user = auth.currentUser;
+  if(!user || user.email !== "km@tkic.com"){
+    alert("❌ Hanya KM yang boleh reset");
+    return;
+  }
+  if(!confirm("Yakin hapus semua data kas?")) return;
+
+  db.collection("kas").get().then(s=>{
+    s.forEach(d=>d.ref.delete());
+    alert("✅ Semua data berhasil direset");
+    load();
+  });
+}
+</script>
+
+</body>
+</html>
